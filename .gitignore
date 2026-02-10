@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+data/images/*.jpg
+data/readings.json
+.DS_Store

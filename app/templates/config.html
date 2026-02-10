@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration - Water Meter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .card { margin-top: 2rem; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
+        .img-preview { width: 100%; max-height: 400px; object-fit: contain; background: #000; }
+        .ocr-result { font-size: 2rem; font-weight: bold; color: #198754; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Water Meter Dashboard</a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="/">Dashboard</a>
+                <a class="nav-link active" href="/config">Configuration</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container pb-5">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Live Preview & OCR Tuning</h5>
+                        <p class="text-muted">Last Update: {{ latest.timestamp }}</p>
+                        <div class="ocr-result mb-3">Detected: {{ latest.value }}</div>
+                        <button class="btn btn-primary" onclick="window.location.reload()">Refresh Image</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title text-center">Raw Camera Image</h6>
+                        <img src="/images/latest.jpg?t={{ range(1, 1000) | random }}" class="img-preview" alt="Raw Image">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title text-center">Processed (OCR Input)</h6>
+                        <img src="/images/processed.jpg?t={{ range(1, 1000) | random }}" class="img-preview" alt="Processed Image">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5>How it works</h5>
+                        <ul>
+                            <li><strong>Raw Image:</strong> Direct capture from Pi Camera 2.</li>
+                            <li><strong>Processed Image:</strong> Grayscale + Adaptive Thresholding applied to highlight the mechanical numbers.</li>
+                            <li><strong>OCR Result:</strong> The numbers extracted by Tesseract OCR using a digits-only whitelist.</li>
+                        </ul>
+                        <p class="alert alert-info">If numbers aren't detected correctly, try adjusting the lighting or the distance of the camera from the meter.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
