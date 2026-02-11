@@ -5,11 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configuration - Water Meter</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
     <style>
         body { background-color: #f8f9fa; }
         .card { margin-top: 2rem; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
-        .img-preview { width: 100%; max-height: 400px; object-fit: contain; background: #000; }
+        .img-preview-container { width: 100%; max-height: 500px; background: #000; overflow: hidden; }
+        .img-preview { max-width: 100%; display: block; }
         .ocr-result { font-size: 2rem; font-weight: bold; color: #198754; }
+        .cropper-view-box, .cropper-face { border-radius: 0; }
     </style>
 </head>
 <body>
@@ -25,16 +28,16 @@
 
     <div class="container pb-5">
         <div class="row">
-            <div class="col-md-8 offset-md-2">
+            <div class="col-md-10 offset-md-1">
                 <div class="card">
                     <div class="card-body text-center">
                         <h5 class="card-title">Camera & OCR Settings</h5>
                         <div class="row g-3 align-items-center justify-content-center mt-2">
                             <div class="col-auto">
-                                <label for="rotation" class="col-form-label">Image Rotation:</label>
+                                <label for="rotation" class="col-form-label">Rotation:</label>
                             </div>
                             <div class="col-auto">
-                                <select id="rotation" class="form-select" onchange="saveConfig()">
+                                <select id="rotation" class="form-select form-select-sm" onchange="saveConfig()">
                                     <option value="0" {% if config.rotation == 0 %}selected{% endif %}>0°</option>
                                     <option value="90" {% if config.rotation == 90 %}selected{% endif %}>90°</option>
                                     <option value="180" {% if config.rotation == 180 %}selected{% endif %}>180°</option>
@@ -42,67 +45,47 @@
                                 </select>
                             </div>
                             <div class="col-auto">
-                                <button class="btn btn-success" id="captureBtn" onclick="takePhoto()">Take Photo Now</button>
+                                <button class="btn btn-sm btn-success" id="captureBtn" onclick="takePhoto()">Take Photo Now</button>
                             </div>
                             <div class="col-auto">
-                                <button class="btn btn-outline-secondary" onclick="window.location.reload()">Refresh View</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="window.location.reload()">Refresh View</button>
                             </div>
                         </div>
                         <div id="captureStatus" class="mt-2 small text-muted"></div>
                         <div class="ocr-result mt-3">Latest Detection: {{ latest.value }}</div>
+                        <div class="text-muted small">Drag on the image below to select the counter area. Settings save automatically when you finish dragging.</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <script>
-            function takePhoto() {
-                const btn = document.getElementById('captureBtn');
-                const status = document.getElementById('captureStatus');
-                btn.disabled = true;
-                status.innerText = "Capturing...";
-                
-                fetch('/api/capture', { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            status.innerText = "Success! Reloading...";
-                            setTimeout(() => window.location.reload(), 1000);
-                        } else {
-                            status.innerText = "Error: " + data.message;
-                            btn.disabled = false;
-                        }
-                    })
-                    .catch(err => {
-                        status.innerText = "Error: " + err;
-                        btn.disabled = false;
-                    });
-            }
-
-            function saveConfig() {
-                const rotation = document.getElementById('rotation').value;
-                fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rotation: parseInt(rotation) })
-                });
-            }
-        </script>
-
         <div class="row mt-4">
-            <div class="col-md-6">
+            <div class="col-md-7">
                 <div class="card">
                     <div class="card-body">
-                        <h6 class="card-title text-center">Raw Camera Image</h6>
-                        <img src="/images/latest.jpg?t={{ range(1, 1000) | random }}" class="img-preview" alt="Raw Image">
+                        <h6 class="card-title text-center">Step 1: Select Area (Raw Image)</h6>
+                        <div class="img-preview-container">
+                            <img src="/images/latest.jpg?t={{ range(1, 1000) | random }}" id="rawImage" class="img-preview" alt="Raw Image">
+                        </div>
+                        <div class="mt-2 text-center">
+                             <span class="badge bg-secondary">Crop Data: 
+                                X:<span id="valX">0</span>, 
+                                Y:<span id="valY">0</span>, 
+                                W:<span id="valW">0</span>, 
+                                H:<span id="valH">0</span>
+                             </span>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-5">
                 <div class="card">
                     <div class="card-body">
-                        <h6 class="card-title text-center">Processed (OCR Input)</h6>
+                        <h6 class="card-title text-center">Step 2: OCR View (Cropped)</h6>
                         <img src="/images/processed.jpg?t={{ range(1, 1000) | random }}" class="img-preview" alt="Processed Image">
+                        <div class="alert alert-info mt-3 small">
+                            Tesseract reads from this cropped image. Ensure only the digits are visible here.
+                        </div>
                     </div>
                 </div>
             </div>
@@ -114,17 +97,94 @@
                     <div class="card-body">
                         <h5>How it works</h5>
                         <ul>
-                            <li><strong>Raw Image:</strong> Direct capture from Pi Camera 2.</li>
-                            <li><strong>Processed Image:</strong> Grayscale + Adaptive Thresholding applied to highlight the mechanical numbers.</li>
-                            <li><strong>OCR Result:</strong> The numbers extracted by Tesseract OCR using a digits-only whitelist.</li>
+                            <li><strong>Step 1:</strong> Select the region containing the numbers. The Pi Zero will crop the full 1024x768 image to this box.</li>
+                            <li><strong>Step 2:</strong> The Pi applies filters to make the numbers stand out. If it's too messy, try a smaller crop.</li>
                         </ul>
-                        <p class="alert alert-info">If numbers aren't detected correctly, try adjusting the lighting or the distance of the camera from the meter.</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script>
+        let cropper;
+        const rawImg = document.getElementById('rawImage');
+        
+        // Initialize Cropper when image loads
+        rawImg.onload = () => {
+            if (cropper) return; // Only init once
+            cropper = new Cropper(rawImg, {
+                viewMode: 1,
+                dragMode: 'crop',
+                autoCropArea: 0.5,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false,
+                data: {
+                    x: {{ config.crop.x if config.crop else 100 }},
+                    y: {{ config.crop.y if config.crop else 100 }},
+                    width: {{ config.crop.w if config.crop else 400 }},
+                    height: {{ config.crop.h if config.crop else 150 }},
+                },
+                crop(event) {
+                    document.getElementById('valX').innerText = Math.round(event.detail.x);
+                    document.getElementById('valY').innerText = Math.round(event.detail.y);
+                    document.getElementById('valW').innerText = Math.round(event.detail.width);
+                    document.getElementById('valH').innerText = Math.round(event.detail.height);
+                },
+                cropend() {
+                    saveConfig();
+                }
+            });
+        };
+
+        function takePhoto() {
+            const btn = document.getElementById('captureBtn');
+            const status = document.getElementById('captureStatus');
+            btn.disabled = true;
+            status.innerText = "Capturing...";
+            
+            fetch('/api/capture', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        status.innerText = "Success! Reloading...";
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else {
+                        status.innerText = "Error: " + data.message;
+                        btn.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    status.innerText = "Error: " + err;
+                    btn.disabled = false;
+                });
+        }
+
+        function saveConfig() {
+            const rotation = document.getElementById('rotation').value;
+            const data = cropper.getData();
+            
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    rotation: parseInt(rotation),
+                    crop: {
+                        x: Math.round(data.x),
+                        y: Math.round(data.y),
+                        w: Math.round(data.width),
+                        h: Math.round(data.height)
+                    }
+                })
+            });
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

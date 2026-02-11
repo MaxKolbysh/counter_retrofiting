@@ -80,7 +80,7 @@ def capture_now():
         
         # Process immediately so UI shows matching images
         reader = WaterMeterReader()
-        processed = reader.preprocess_image(f"{IMAGES_DIR}/latest.jpg")
+        processed = reader.preprocess_image(f"{IMAGES_DIR}/latest.jpg", crop=config.get('crop'))
         import cv2
         cv2.imwrite(f"{IMAGES_DIR}/processed.jpg", processed)
         

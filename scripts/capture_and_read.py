@@ -83,7 +83,7 @@ def main():
 
     # Process
     try:
-        processed = reader.preprocess_image(IMAGE_PATH)
+        processed = reader.preprocess_image(IMAGE_PATH, crop=config.get('crop'))
         # Save processed for debugging
         cv2.imwrite(PROCESSED_PATH, processed)
         

@@ -14,12 +14,20 @@ class WaterMeterReader:
             print("WARNING: Tesseract not found. OCR will fail.")
             print("Install it with: sudo apt install tesseract-ocr")
 
-    def preprocess_image(self, image_path):
+    def preprocess_image(self, image_path, crop=None):
         """Preprocess the image to highlight numbers."""
         # Load image
         img = cv2.imread(image_path)
         if img is None:
             raise ValueError(f"Could not read image at {image_path}")
+
+        # Apply crop if provided (x, y, w, h)
+        if crop and all(k in crop for k in ['x', 'y', 'w', 'h']):
+            x, y, w, h = crop['x'], crop['y'], crop['w'], crop['h']
+            # Ensure coordinates are within image bounds
+            img = img[y:y+h, x:x+w]
+            if img.size == 0:
+                raise ValueError("Invalid crop coordinates resulted in empty image")
 
         # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
