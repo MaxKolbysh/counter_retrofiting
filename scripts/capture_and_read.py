@@ -26,13 +26,21 @@ def main():
     # Camera Capture logic
     captured = False
     
-    # Try libcamera-still first (modern Raspberry Pi OS - Bullseye/Bookworm)
-    print("Attempting to capture using libcamera-still...")
-    ret = os.system(f"libcamera-still -o {IMAGE_PATH} --immediate --nopreview --timeout 1")
-    if ret == 0:
-        print("Image captured successfully using libcamera-still.")
-        captured = True
-    else:
+    # Try libcamera/rpicam-still (modern Raspberry Pi OS - Bullseye/Bookworm)
+    commands = [
+        f"rpicam-still -o {IMAGE_PATH} --immediate --nopreview --timeout 1",
+        f"libcamera-still -o {IMAGE_PATH} --immediate --nopreview --timeout 1"
+    ]
+    
+    for cmd in commands:
+        print(f"Attempting to capture using: {cmd.split()[0]}...")
+        ret = os.system(cmd)
+        if ret == 0:
+            print(f"Image captured successfully using {cmd.split()[0]}.")
+            captured = True
+            break
+    
+    if not captured:
         # Try legacy picamera library
         try:
             from picamera import PiCamera
