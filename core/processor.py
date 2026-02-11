@@ -37,11 +37,14 @@ class WaterMeterReader:
 
     def read_numbers(self, processed_image):
         """Use Tesseract to extract numbers from the processed image."""
-        # Configure tesseract to only look for digits
-        custom_config = r'--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789'
+        # PSM 6: Assume a single uniform block of text.
+        # PSM 7: Treat the image as a single text line.
+        # PSM 11: Find as much text as possible in no particular order.
+        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789'
         
         # Pytesseract expects RGB or PIL image
         text = pytesseract.image_to_string(processed_image, config=custom_config)
+        print(f"DEBUG: OCR raw output: '{text}'")
         return text.strip()
 
 if __name__ == "__main__":

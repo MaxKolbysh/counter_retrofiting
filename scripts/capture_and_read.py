@@ -27,10 +27,10 @@ def main():
     captured = False
     
     # Try libcamera/rpicam-still (modern Raspberry Pi OS - Bullseye/Bookworm)
-    # We use a short timeout in the command and also check if it hangs
+    # Lower resolution (1024x768) is better for Pi Zero performance
     commands = [
-        f"rpicam-still -o {IMAGE_PATH} --immediate --nopreview --timeout 2000",
-        f"libcamera-still -o {IMAGE_PATH} --immediate --nopreview --timeout 2000"
+        f"rpicam-still -o {IMAGE_PATH} --width 1024 --height 768 --immediate --nopreview --timeout 2000",
+        f"libcamera-still -o {IMAGE_PATH} --width 1024 --height 768 --immediate --nopreview --timeout 2000"
     ]
     
     for cmd in commands:
@@ -78,24 +78,26 @@ def main():
         cv2.imwrite(PROCESSED_PATH, processed)
         
         value = reader.read_numbers(processed)
-        print(f"Read value: {value}")
+        print(f"Read value: '{value}'")
         
-        if value:
-            # Save reading
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            reading = {"timestamp": timestamp, "value": value}
-            
-            data = []
-            if os.path.exists(READINGS_FILE):
-                with open(READINGS_FILE, 'r') as f:
-                    try:
-                        data = json.load(f)
-                    except:
-                        data = []
-            
-            data.append(reading)
-            with open(READINGS_FILE, 'w') as f:
-                json.dump(data, f, indent=4)
+        # Save reading regardless of whether value is empty, so we see the timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        reading = {"timestamp": timestamp, "value": value if value else "N/A"}
+        
+        data = []
+        if os.path.exists(READINGS_FILE):
+            with open(READINGS_FILE, 'r') as f:
+                try:
+                    data = json.load(f)
+                except:
+                    data = []
+        
+        data.append(reading)
+        # Keep only last 100 readings to avoid file bloating
+        data = data[-100:]
+        with open(READINGS_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+        print(f"Reading saved to {READINGS_FILE}")
                 
     except Exception as e:
         print(f"Error during processing: {e}")

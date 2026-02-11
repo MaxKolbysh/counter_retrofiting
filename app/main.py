@@ -6,7 +6,8 @@ from datetime import datetime
 app = Flask(__name__)
 
 # Path to store readings
-DATA_DIR = 'data'
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
 IMAGES_DIR = os.path.join(DATA_DIR, 'images')
 READINGS_FILE = os.path.join(DATA_DIR, 'readings.json')
 
