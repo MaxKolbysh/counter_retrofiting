@@ -20,7 +20,7 @@ class WaterMeterReader:
             print("WARNING: GEMINI_API_KEY not found in environment.")
 
     def preprocess_image(self, image_path, crop=None, rotate=0):
-        """Preprocess the image: Rotate and Crop."""
+        """Preprocess the image: Rotate and Crop in color."""
         img = cv2.imread(image_path)
         if img is None:
             raise ValueError(f"Could not read image at {image_path}")
@@ -43,6 +43,10 @@ class WaterMeterReader:
             M = cv2.getRotationMatrix2D(center, angle, 1.0)
             img = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))
 
+        # 3. Upscale slightly for better AI clarity if the crop is small
+        if img.shape[0] < 200:
+            img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+
         return img
 
     def read_numbers(self, processed_image):
@@ -51,12 +55,12 @@ class WaterMeterReader:
             return "ERR_NO_KEY"
 
         try:
-            # Convert to RGB and encode as JPEG
+            # Convert OpenCV image (BGR) to RGB for Gemini
             rgb_img = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
             _, buffer = cv2.imencode('.jpg', rgb_img)
             
-            # Use the new SDK format
-            prompt = "Read the numeric value from this water meter counter. Return ONLY the digits as a single number. If digits are partially turned, provide your best guess."
+            # Prepare prompt
+            prompt = "Read the numeric value from this water meter counter. Return ONLY the digits as a single number. This is a mechanical counter; some digits might be halfway turned."
             
             response = self.client.models.generate_content(
                 model=self.model_id,
@@ -67,6 +71,7 @@ class WaterMeterReader:
             )
 
             result = response.text.strip()
+            # Extract digits only
             digits = "".join(filter(str.isdigit, result))
             
             print(f"Gemini Response: {result} -> Extracted: {digits}")
@@ -78,4 +83,4 @@ class WaterMeterReader:
 
 if __name__ == "__main__":
     reader = WaterMeterReader()
-    print("Reader initialized with modern google-genai support.")
+    print("Reader initialized with color AI support.")
