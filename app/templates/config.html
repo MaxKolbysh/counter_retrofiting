@@ -8,7 +8,10 @@
     <style>
         body { background-color: #f8f9fa; }
         .card { margin-top: 2rem; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
-        .img-preview { width: 100%; max-height: 400px; object-fit: contain; background: #000; }
+        .img-preview { width: 100%; max-height: 400px; object-fit: contain; background: #000; transition: transform 0.3s ease; }
+        .rotate-90 { transform: rotate(90deg); }
+        .rotate-180 { transform: rotate(180deg); }
+        .rotate-270 { transform: rotate(270deg); }
         .ocr-result { font-size: 2rem; font-weight: bold; color: #198754; }
     </style>
 </head>
@@ -42,9 +45,13 @@
                                 </select>
                             </div>
                             <div class="col-auto">
+                                <button class="btn btn-success" id="captureBtn" onclick="takePhoto()">Take Photo Now</button>
+                            </div>
+                            <div class="col-auto">
                                 <button class="btn btn-outline-secondary" onclick="window.location.reload()">Refresh View</button>
                             </div>
                         </div>
+                        <div id="captureStatus" class="mt-2 small text-muted"></div>
                         <div class="ocr-result mt-3">Latest Detection: {{ latest.value }}</div>
                     </div>
                 </div>
@@ -52,18 +59,49 @@
         </div>
 
         <script>
+            function takePhoto() {
+                const btn = document.getElementById('captureBtn');
+                const status = document.getElementById('captureStatus');
+                btn.disabled = true;
+                status.innerText = "Capturing...";
+                
+                fetch('/api/capture', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            status.innerText = "Success! Reloading...";
+                            setTimeout(() => window.location.reload(), 1000);
+                        } else {
+                            status.innerText = "Error: " + data.message;
+                            btn.disabled = false;
+                        }
+                    })
+                    .catch(err => {
+                        status.innerText = "Error: " + err;
+                        btn.disabled = false;
+                    });
+            }
+
+            function applyRotationClass(deg) {
+                const images = document.querySelectorAll('.img-preview');
+                images.forEach(img => {
+                    img.classList.remove('rotate-90', 'rotate-180', 'rotate-270');
+                    if (deg != 0) img.classList.add('rotate-' + deg);
+                });
+            }
+
             function saveConfig() {
                 const rotation = document.getElementById('rotation').value;
+                applyRotationClass(rotation);
                 fetch('/api/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ rotation: parseInt(rotation) })
-                }).then(response => {
-                    if (response.ok) {
-                        alert('Settings saved. They will apply on the next camera capture.');
-                    }
                 });
             }
+
+            // Apply rotation on load
+            window.onload = () => applyRotationClass({{ config.rotation }});
         </script>
 
         <div class="row mt-4">

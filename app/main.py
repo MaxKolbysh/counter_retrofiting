@@ -61,6 +61,21 @@ def clear_history():
             json.dump([], f)
     return jsonify({"status": "success"})
 
+@app.route('/api/capture', methods=['POST'])
+def capture_now():
+    import subprocess
+    # Run the capture script as a single-run command
+    # We'll need a way to run the main logic once.
+    # For now, let's just trigger the rpicam-still command directly using current config.
+    config = get_config()
+    rotation = config.get('rotation', 0)
+    cmd = f"rpicam-still -o {IMAGES_DIR}/latest.jpg --width 1024 --height 768 --rotation {rotation} --immediate --nopreview --timeout 2000"
+    try:
+        subprocess.run(cmd, shell=True, check=True)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/api/latest')
 def api_latest():
     readings = get_latest_readings(1)
