@@ -6,6 +6,13 @@ class WaterMeterReader:
     def __init__(self, tesseract_cmd=None):
         if tesseract_cmd:
             pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+        
+        # Check if tesseract is installed
+        try:
+            pytesseract.get_tesseract_version()
+        except pytesseract.TesseractNotFoundError:
+            print("WARNING: Tesseract not found. OCR will fail.")
+            print("Install it with: sudo apt install tesseract-ocr")
 
     def preprocess_image(self, image_path):
         """Preprocess the image to highlight numbers."""

@@ -27,18 +27,26 @@ def main():
     captured = False
     
     # Try libcamera/rpicam-still (modern Raspberry Pi OS - Bullseye/Bookworm)
+    # We use a short timeout in the command and also check if it hangs
     commands = [
-        f"rpicam-still -o {IMAGE_PATH} --immediate --nopreview --timeout 1",
-        f"libcamera-still -o {IMAGE_PATH} --immediate --nopreview --timeout 1"
+        f"rpicam-still -o {IMAGE_PATH} --immediate --nopreview --timeout 2000",
+        f"libcamera-still -o {IMAGE_PATH} --immediate --nopreview --timeout 2000"
     ]
     
     for cmd in commands:
         print(f"Attempting to capture using: {cmd.split()[0]}...")
-        ret = os.system(cmd)
-        if ret == 0:
-            print(f"Image captured successfully using {cmd.split()[0]}.")
-            captured = True
-            break
+        try:
+            # os.system doesn't allow easy timeouts, using subprocess instead
+            import subprocess
+            ret = subprocess.run(cmd, shell=True, timeout=10)
+            if ret.returncode == 0:
+                print(f"Image captured successfully using {cmd.split()[0]}.")
+                captured = True
+                break
+        except subprocess.TimeoutExpired:
+            print(f"Command {cmd.split()[0]} timed out.")
+        except Exception as e:
+            print(f"Error running {cmd.split()[0]}: {e}")
     
     if not captured:
         # Try legacy picamera library
