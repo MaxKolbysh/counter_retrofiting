@@ -10,9 +10,19 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 IMAGES_DIR = os.path.join(DATA_DIR, 'images')
 READINGS_FILE = os.path.join(DATA_DIR, 'readings.json')
+CONFIG_FILE = os.path.join(DATA_DIR, 'config.json')
 
 # Ensure directories exist
 os.makedirs(IMAGES_DIR, exist_ok=True)
+
+def get_config():
+    if not os.path.exists(CONFIG_FILE):
+        return {"rotation": 0}
+    with open(CONFIG_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return {"rotation": 0}
 
 def get_latest_readings(limit=10):
     if not os.path.exists(READINGS_FILE):
@@ -34,7 +44,22 @@ def index():
 def config():
     readings = get_latest_readings(1)
     latest = readings[0] if readings else {"timestamp": "N/A", "value": "N/A"}
-    return render_template('config.html', latest=latest)
+    return render_template('config.html', latest=latest, config=get_config())
+
+@app.route('/api/config', methods=['POST'])
+def save_config():
+    from flask import request
+    new_config = request.json
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(new_config, f, indent=4)
+    return jsonify({"status": "success"})
+
+@app.route('/api/clear_history', methods=['POST'])
+def clear_history():
+    if os.path.exists(READINGS_FILE):
+        with open(READINGS_FILE, 'w') as f:
+            json.dump([], f)
+    return jsonify({"status": "success"})
 
 @app.route('/api/latest')
 def api_latest():

@@ -23,14 +23,24 @@ def main():
     # Initialize reader
     reader = WaterMeterReader()
     
+    # Load config
+    CONFIG_PATH = os.path.join(BASE_DIR, 'data/config.json')
+    rotation = 0
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, 'r') as f:
+                rotation = json.load(f).get('rotation', 0)
+        except:
+            pass
+
     # Camera Capture logic
     captured = False
     
     # Try libcamera/rpicam-still (modern Raspberry Pi OS - Bullseye/Bookworm)
     # Lower resolution (1024x768) is better for Pi Zero performance
     commands = [
-        f"rpicam-still -o {IMAGE_PATH} --width 1024 --height 768 --immediate --nopreview --timeout 2000",
-        f"libcamera-still -o {IMAGE_PATH} --width 1024 --height 768 --immediate --nopreview --timeout 2000"
+        f"rpicam-still -o {IMAGE_PATH} --width 1024 --height 768 --rotation {rotation} --immediate --nopreview --timeout 2000",
+        f"libcamera-still -o {IMAGE_PATH} --width 1024 --height 768 --rotation {rotation} --immediate --nopreview --timeout 2000"
     ]
     
     for cmd in commands:

@@ -25,17 +25,46 @@
 
     <div class="container pb-5">
         <div class="row">
-            <div class="col-12">
+            <div class="col-md-8 offset-md-2">
                 <div class="card">
                     <div class="card-body text-center">
-                        <h5 class="card-title">Live Preview & OCR Tuning</h5>
-                        <p class="text-muted">Last Update: {{ latest.timestamp }}</p>
-                        <div class="ocr-result mb-3">Detected: {{ latest.value }}</div>
-                        <button class="btn btn-primary" onclick="window.location.reload()">Refresh Image</button>
+                        <h5 class="card-title">Camera & OCR Settings</h5>
+                        <div class="row g-3 align-items-center justify-content-center mt-2">
+                            <div class="col-auto">
+                                <label for="rotation" class="col-form-label">Image Rotation:</label>
+                            </div>
+                            <div class="col-auto">
+                                <select id="rotation" class="form-select" onchange="saveConfig()">
+                                    <option value="0" {% if config.rotation == 0 %}selected{% endif %}>0°</option>
+                                    <option value="90" {% if config.rotation == 90 %}selected{% endif %}>90°</option>
+                                    <option value="180" {% if config.rotation == 180 %}selected{% endif %}>180°</option>
+                                    <option value="270" {% if config.rotation == 270 %}selected{% endif %}>270°</option>
+                                </select>
+                            </div>
+                            <div class="col-auto">
+                                <button class="btn btn-outline-secondary" onclick="window.location.reload()">Refresh View</button>
+                            </div>
+                        </div>
+                        <div class="ocr-result mt-3">Latest Detection: {{ latest.value }}</div>
                     </div>
                 </div>
             </div>
         </div>
+
+        <script>
+            function saveConfig() {
+                const rotation = document.getElementById('rotation').value;
+                fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rotation: parseInt(rotation) })
+                }).then(response => {
+                    if (response.ok) {
+                        alert('Settings saved. They will apply on the next camera capture.');
+                    }
+                });
+            }
+        </script>
 
         <div class="row mt-4">
             <div class="col-md-6">
