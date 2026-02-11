@@ -14,12 +14,19 @@ class WaterMeterReader:
             print("WARNING: Tesseract not found. OCR will fail.")
             print("Install it with: sudo apt install tesseract-ocr")
 
-    def preprocess_image(self, image_path, crop=None):
+    def preprocess_image(self, image_path, crop=None, rotate=0):
         """Preprocess the image to highlight numbers."""
         # Load image
         img = cv2.imread(image_path)
         if img is None:
             raise ValueError(f"Could not read image at {image_path}")
+
+        # Manual Rotation (if any)
+        if rotate != 0:
+            (h, w) = img.shape[:2]
+            center = (w // 2, h // 2)
+            M = cv2.getRotationMatrix2D(center, rotate, 1.0)
+            img = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
 
         # Apply crop if provided (x, y, w, h)
         if crop and all(k in crop for k in ['x', 'y', 'w', 'h']):
@@ -39,22 +46,6 @@ class WaterMeterReader:
         binary = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
         )
-
-        # Deskewing logic
-        coords = np.column_stack(np.where(binary > 0))
-        angle = cv2.minAreaRect(coords)[-1]
-        
-        # Adjust angle
-        if angle < -45:
-            angle = -(90 + angle)
-        else:
-            angle = -angle
-            
-        # Rotate to deskew
-        (h, w) = binary.shape[:2]
-        center = (w // 2, h // 2)
-        M = cv2.getRotationMatrix2D(center, angle, 1.0)
-        binary = cv2.warpAffine(binary, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
 
         # Noise removal
         kernel = np.ones((2, 2), np.uint8)

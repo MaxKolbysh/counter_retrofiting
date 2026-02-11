@@ -25,28 +25,29 @@ def main():
     
     # Load config
     CONFIG_PATH = os.path.join(BASE_DIR, 'data/config.json')
-    rotation = 0
+    rotate = 0
+    crop = None
     if os.path.exists(CONFIG_PATH):
         try:
             with open(CONFIG_PATH, 'r') as f:
-                rotation = json.load(f).get('rotation', 0)
+                cfg = json.load(f)
+                rotate = cfg.get('rotate', 0)
+                crop = cfg.get('crop')
         except:
             pass
 
     # Camera Capture logic
     captured = False
     
-    # Try libcamera/rpicam-still (modern Raspberry Pi OS - Bullseye/Bookworm)
-    # Lower resolution (1024x768) is better for Pi Zero performance
+    # Try libcamera/rpicam-still
     commands = [
-        f"rpicam-still -o {IMAGE_PATH} --width 1024 --height 768 --rotation {rotation} --immediate --nopreview --timeout 2000",
-        f"libcamera-still -o {IMAGE_PATH} --width 1024 --height 768 --rotation {rotation} --immediate --nopreview --timeout 2000"
+        f"rpicam-still -o {IMAGE_PATH} --width 1024 --height 768 --immediate --nopreview --timeout 2000",
+        f"libcamera-still -o {IMAGE_PATH} --width 1024 --height 768 --immediate --nopreview --timeout 2000"
     ]
     
     for cmd in commands:
         print(f"Attempting to capture using: {cmd.split()[0]}...")
         try:
-            # os.system doesn't allow easy timeouts, using subprocess instead
             import subprocess
             ret = subprocess.run(cmd, shell=True, timeout=10)
             if ret.returncode == 0:
@@ -65,7 +66,6 @@ def main():
             with PiCamera() as camera:
                 camera.resolution = (1024, 768)
                 camera.start_preview()
-                # Camera warm-up time
                 time.sleep(2)
                 camera.capture(IMAGE_PATH)
             print("Image captured successfully using legacy Picamera.")
@@ -83,14 +83,14 @@ def main():
 
     # Process
     try:
-        processed = reader.preprocess_image(IMAGE_PATH, crop=config.get('crop'))
+        processed = reader.preprocess_image(IMAGE_PATH, crop=crop, rotate=rotate)
         # Save processed for debugging
         cv2.imwrite(PROCESSED_PATH, processed)
         
         value = reader.read_numbers(processed)
         print(f"Read value: '{value}'")
         
-        # Save reading regardless of whether value is empty, so we see the timestamp
+        # Save reading
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         reading = {"timestamp": timestamp, "value": value if value else "N/A"}
         
@@ -103,7 +103,6 @@ def main():
                     data = []
         
         data.append(reading)
-        # Keep only last 100 readings to avoid file bloating
         data = data[-100:]
         with open(READINGS_FILE, 'w') as f:
             json.dump(data, f, indent=4)

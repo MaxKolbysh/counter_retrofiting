@@ -71,16 +71,20 @@ def capture_now():
     from core.processor import WaterMeterReader
     
     config = get_config()
-    rotation = config.get('rotation', 0)
+    rotate = config.get('rotate', 0)
     
-    # Capture
-    cmd = f"rpicam-still -o {IMAGES_DIR}/latest.jpg --width 1024 --height 768 --rotation {rotation} --immediate --nopreview --timeout 2000"
+    # Capture (We use 0 for hardware rotation now to avoid conflict with manual rotation)
+    cmd = f"rpicam-still -o {IMAGES_DIR}/latest.jpg --width 1024 --height 768 --immediate --nopreview --timeout 2000"
     try:
         subprocess.run(cmd, shell=True, check=True)
         
         # Process immediately so UI shows matching images
         reader = WaterMeterReader()
-        processed = reader.preprocess_image(f"{IMAGES_DIR}/latest.jpg", crop=config.get('crop'))
+        processed = reader.preprocess_image(
+            f"{IMAGES_DIR}/latest.jpg", 
+            crop=config.get('crop'),
+            rotate=rotate
+        )
         import cv2
         cv2.imwrite(f"{IMAGES_DIR}/processed.jpg", processed)
         

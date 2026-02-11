@@ -34,17 +34,15 @@
                         <h5 class="card-title">Camera & OCR Settings</h5>
                         <div class="row g-3 align-items-center justify-content-center mt-2">
                             <div class="col-auto">
-                                <label for="rotation" class="col-form-label">Rotation:</label>
+                                <label class="col-form-label">Rotate Image:</label>
+                                <div class="btn-group btn-group-sm ms-2">
+                                    <button class="btn btn-outline-primary" onclick="rotate(-90)">-90°</button>
+                                    <button class="btn btn-outline-primary" onclick="rotate(-1)">-1°</button>
+                                    <button class="btn btn-outline-primary" onclick="rotate(1)">+1°</button>
+                                    <button class="btn btn-outline-primary" onclick="rotate(90)">+90°</button>
+                                </div>
                             </div>
-                            <div class="col-auto">
-                                <select id="rotation" class="form-select form-select-sm" onchange="saveConfig()">
-                                    <option value="0" {% if config.rotation == 0 %}selected{% endif %}>0°</option>
-                                    <option value="90" {% if config.rotation == 90 %}selected{% endif %}>90°</option>
-                                    <option value="180" {% if config.rotation == 180 %}selected{% endif %}>180°</option>
-                                    <option value="270" {% if config.rotation == 270 %}selected{% endif %}>270°</option>
-                                </select>
-                            </div>
-                            <div class="col-auto">
+                            <div class="col-auto ms-3">
                                 <button class="btn btn-sm btn-success" id="captureBtn" onclick="takePhoto()">Take Photo Now</button>
                             </div>
                             <div class="col-auto">
@@ -53,7 +51,7 @@
                         </div>
                         <div id="captureStatus" class="mt-2 small text-muted"></div>
                         <div class="ocr-result mt-3">Latest Detection: {{ latest.value }}</div>
-                        <div class="text-muted small">Drag on the image below to select the counter area. Settings save automatically when you finish dragging.</div>
+                        <div class="text-muted small">1. Rotate image until numbers are horizontal. 2. Drag box to select numbers. 3. Click "Take Photo Now".</div>
                     </div>
                 </div>
             </div>
@@ -97,8 +95,8 @@
                     <div class="card-body">
                         <h5>How it works</h5>
                         <ul>
-                            <li><strong>Step 1:</strong> Select the region containing the numbers. The Pi Zero will crop the full 1024x768 image to this box.</li>
-                            <li><strong>Step 2:</strong> The Pi applies filters to make the numbers stand out. If it's too messy, try a smaller crop.</li>
+                            <li><strong>Step 1:</strong> Rotate the image so the numbers are perfectly flat. Then draw a box around them.</li>
+                            <li><strong>Step 2:</strong> Click "Take Photo Now" to apply these settings and see the result.</li>
                         </ul>
                     </div>
                 </div>
@@ -128,11 +126,18 @@
                 zoomable: false,
                 scalable: false,
                 movable: false,
+                rotatable: true,
                 data: {
                     x: {{ config.crop.x if config.crop else 100 }},
                     y: {{ config.crop.y if config.crop else 100 }},
                     width: {{ config.crop.w if config.crop else 400 }},
                     height: {{ config.crop.h if config.crop else 150 }},
+                },
+                ready() {
+                    const initialRotate = {{ config.rotate if config.rotate else 0 }};
+                    if (initialRotate !== 0) {
+                        cropper.rotateTo(initialRotate);
+                    }
                 },
                 crop(event) {
                     document.getElementById('valX').innerText = Math.round(event.detail.x);
@@ -145,6 +150,11 @@
                 }
             });
         };
+
+        function rotate(deg) {
+            cropper.rotate(deg);
+            saveConfig();
+        }
 
         function takePhoto() {
             const btn = document.getElementById('captureBtn');
@@ -170,14 +180,13 @@
         }
 
         function saveConfig() {
-            const rotation = document.getElementById('rotation').value;
             const data = cropper.getData();
             
             fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    rotation: parseInt(rotation),
+                    rotate: Math.round(data.rotate),
                     crop: {
                         x: Math.round(data.x),
                         y: Math.round(data.y),
