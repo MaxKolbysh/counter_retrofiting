@@ -80,7 +80,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-title text-center">Step 2: OCR View (Cropped)</h6>
-                        <img src="/images/processed.jpg?t={{ range(1, 1000) | random }}" class="img-preview" alt="Processed Image">
+                        <img src="/images/processed.jpg?t={{ range(1, 1000) | random }}" class="img-preview" alt="OCR View (Cropped)">
                         <div class="alert alert-info mt-3 small">
                             Tesseract reads from this cropped image. Ensure only the digits are visible here.
                         </div>
@@ -111,7 +111,17 @@
         
         // Initialize Cropper when image loads
         rawImg.onload = () => {
-            if (cropper) return; // Only init once
+            // Store current data if we are refreshing
+            const currentData = cropper ? cropper.getData(true) : {
+                x: {{ config.crop.x if config.crop else 100 }},
+                y: {{ config.crop.y if config.crop else 100 }},
+                width: {{ config.crop.w if config.crop else 400 }},
+                height: {{ config.crop.h if config.crop else 150 }},
+                rotate: {{ config.rotate if config.rotate else 0 }}
+            };
+
+            if (cropper) cropper.destroy();
+            
             cropper = new Cropper(rawImg, {
                 viewMode: 2,
                 dragMode: 'none',
@@ -127,16 +137,10 @@
                 scalable: false,
                 movable: false,
                 rotatable: true,
-                data: {
-                    x: {{ config.crop.x if config.crop else 100 }},
-                    y: {{ config.crop.y if config.crop else 100 }},
-                    width: {{ config.crop.w if config.crop else 400 }},
-                    height: {{ config.crop.h if config.crop else 150 }},
-                },
+                data: currentData,
                 ready() {
-                    const initialRotate = {{ config.rotate if config.rotate else 0 }};
-                    if (initialRotate !== 0) {
-                        cropper.rotateTo(initialRotate);
+                    if (currentData.rotate !== 0) {
+                        cropper.rotateTo(currentData.rotate);
                     }
                 },
                 crop(event) {
@@ -170,14 +174,10 @@
                         // Force refresh images by updating src with new timestamp
                         const t = new Date().getTime();
                         const raw = document.getElementById('rawImage');
-                        const proc = document.querySelector('img[alt="Processed Image"]');
+                        const proc = document.querySelector('img[alt="OCR View (Cropped)"]');
                         
-                        // We need to destroy cropper before changing source
-                        if (cropper) cropper.destroy();
-                        cropper = null;
-
                         raw.src = "/images/latest.jpg?t=" + t;
-                        proc.src = "/images/processed.jpg?t=" + t;
+                        if (proc) proc.src = "/images/processed.jpg?t=" + t;
                         
                         setTimeout(() => {
                             status.innerText = "";
