@@ -3,6 +3,7 @@ import os
 import json
 from datetime import datetime
 import sys
+import cv2
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -23,20 +24,34 @@ def main():
     reader = WaterMeterReader()
     
     # Camera Capture logic
-    try:
-        from picamera import PiCamera # Legacy or use Picamera2
-        # For Camera 2 / Bullseye+ use Picamera2:
-        # from picamera2 import Picamera2
-        # picam2 = Picamera2()
-        # picam2.start()
-        # picam2.capture_file(IMAGE_PATH)
-        print("Camera detected. Capturing...")
-        # (Placeholder for actual capture command)
-        # Using shell command as fallback if library is tricky
-        os.system(f"libcamera-still -o {IMAGE_PATH} --immediate")
-    except ImportError:
-        print("Picamera not found. Running in simulation mode.")
-        if not os.path.exists(IMAGE_PATH):
+    captured = False
+    
+    # Try libcamera-still first (modern Raspberry Pi OS - Bullseye/Bookworm)
+    print("Attempting to capture using libcamera-still...")
+    ret = os.system(f"libcamera-still -o {IMAGE_PATH} --immediate --nopreview --timeout 1")
+    if ret == 0:
+        print("Image captured successfully using libcamera-still.")
+        captured = True
+    else:
+        # Try legacy picamera library
+        try:
+            from picamera import PiCamera
+            with PiCamera() as camera:
+                camera.resolution = (1024, 768)
+                camera.start_preview()
+                # Camera warm-up time
+                time.sleep(2)
+                camera.capture(IMAGE_PATH)
+            print("Image captured successfully using legacy Picamera.")
+            captured = True
+        except (ImportError, Exception):
+            pass
+
+    if not captured:
+        if os.path.exists(IMAGE_PATH):
+            print("Camera not found, but found existing image. Running in simulation mode.")
+        else:
+            print("Camera not found and no simulation image found.")
             print(f"Please provide an image at {IMAGE_PATH} for simulation.")
             return
 
@@ -44,8 +59,7 @@ def main():
     try:
         processed = reader.preprocess_image(IMAGE_PATH)
         # Save processed for debugging
-        import cv2
-        cv2.imwrite('data/images/processed.jpg', processed)
+        cv2.imwrite(PROCESSED_PATH, processed)
         
         value = reader.read_numbers(processed)
         print(f"Read value: {value}")
