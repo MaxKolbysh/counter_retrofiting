@@ -166,8 +166,23 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        status.innerText = "Success! Reloading...";
-                        setTimeout(() => window.location.reload(), 1000);
+                        status.innerText = "Success! Updating images...";
+                        // Force refresh images by updating src with new timestamp
+                        const t = new Date().getTime();
+                        const raw = document.getElementById('rawImage');
+                        const proc = document.querySelector('img[alt="Processed Image"]');
+                        
+                        // We need to destroy cropper before changing source
+                        if (cropper) cropper.destroy();
+                        cropper = null;
+
+                        raw.src = "/images/latest.jpg?t=" + t;
+                        proc.src = "/images/processed.jpg?t=" + t;
+                        
+                        setTimeout(() => {
+                            status.innerText = "";
+                            btn.disabled = false;
+                        }, 2000);
                     } else {
                         status.innerText = "Error: " + data.message;
                         btn.disabled = false;
@@ -180,7 +195,8 @@
         }
 
         function saveConfig() {
-            const data = cropper.getData();
+            if (!cropper) return;
+            const data = cropper.getData(true);
             
             fetch('/api/config', {
                 method: 'POST',
@@ -188,10 +204,10 @@
                 body: JSON.stringify({ 
                     rotate: Math.round(data.rotate),
                     crop: {
-                        x: Math.round(data.x),
-                        y: Math.round(data.y),
-                        w: Math.round(data.width),
-                        h: Math.round(data.height)
+                        x: data.x,
+                        y: data.y,
+                        w: data.width,
+                        h: data.height
                     }
                 })
             });
