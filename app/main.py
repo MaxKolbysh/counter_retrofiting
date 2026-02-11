@@ -2,6 +2,10 @@ from flask import Flask, render_template, jsonify, send_from_directory
 import os
 import json
 from datetime import datetime
+import sys
+
+# Add project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 app = Flask(__name__)
 
