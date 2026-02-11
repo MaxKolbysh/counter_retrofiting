@@ -31,27 +31,28 @@
             <div class="col-md-10 offset-md-1">
                 <div class="card">
                     <div class="card-body text-center">
-                        <h5 class="card-title">Camera & OCR Settings</h5>
+                        <h5 class="card-title">Camera & Recognition Settings</h5>
                         <div class="row g-3 align-items-center justify-content-center mt-2">
                             <div class="col-auto">
-                                <label class="col-form-label">Rotate Image:</label>
+                                <label class="col-form-label">Rotation:</label>
                                 <div class="btn-group btn-group-sm ms-2">
-                                    <button class="btn btn-outline-primary" onclick="rotate(-90)">-90°</button>
                                     <button class="btn btn-outline-primary" onclick="rotate(-1)">-1°</button>
                                     <button class="btn btn-outline-primary" onclick="rotate(1)">+1°</button>
-                                    <button class="btn btn-outline-primary" onclick="rotate(90)">+90°</button>
                                 </div>
                             </div>
                             <div class="col-auto ms-3">
-                                <button class="btn btn-sm btn-success" id="captureBtn" onclick="takePhoto()">Take Photo Now</button>
+                                <label for="numDigits" class="col-form-label">Digits:</label>
                             </div>
                             <div class="col-auto">
-                                <button class="btn btn-sm btn-outline-secondary" onclick="window.location.reload()">Refresh View</button>
+                                <input type="number" id="numDigits" class="form-control form-control-sm" style="width: 60px;" value="{{ config.num_digits if config.num_digits else 5 }}" onchange="saveConfig()">
+                            </div>
+                            <div class="col-auto ms-3">
+                                <button class="btn btn-sm btn-success" id="captureBtn" onclick="takePhoto()">Take Photo</button>
+                                <button class="btn btn-sm btn-warning" onclick="saveTemplates()">Save as Templates</button>
                             </div>
                         </div>
                         <div id="captureStatus" class="mt-2 small text-muted"></div>
-                        <div class="ocr-result mt-3">Latest Detection: {{ latest.value }}</div>
-                        <div class="text-muted small">1. Rotate image until numbers are horizontal. 2. Drag box to select numbers. 3. Click "Take Photo Now".</div>
+                        <div class="ocr-result mt-3">Detected Value: {{ latest.value }}</div>
                     </div>
                 </div>
             </div>
@@ -61,17 +62,9 @@
             <div class="col-md-7">
                 <div class="card">
                     <div class="card-body">
-                        <h6 class="card-title text-center">Step 1: Select Area (Raw Image)</h6>
+                        <h6 class="card-title text-center">Step 1: Raw Image & Alignment</h6>
                         <div class="img-preview-container">
                             <img src="/images/latest.jpg?t={{ range(1, 1000) | random }}" id="rawImage" class="img-preview" alt="Raw Image">
-                        </div>
-                        <div class="mt-2 text-center">
-                             <span class="badge bg-secondary">Crop Data: 
-                                X:<span id="valX">0</span>, 
-                                Y:<span id="valY">0</span>, 
-                                W:<span id="valW">0</span>, 
-                                H:<span id="valH">0</span>
-                             </span>
                         </div>
                     </div>
                 </div>
@@ -79,25 +72,11 @@
             <div class="col-md-5">
                 <div class="card">
                     <div class="card-body">
-                        <h6 class="card-title text-center">Step 2: OCR View (Cropped)</h6>
+                        <h6 class="card-title text-center">Step 2: Cropped View</h6>
                         <img src="/images/processed.jpg?t={{ range(1, 1000) | random }}" class="img-preview" alt="OCR View (Cropped)">
-                        <div class="alert alert-info mt-3 small">
-                            Tesseract reads from this cropped image. Ensure only the digits are visible here.
+                        <div class="alert alert-warning mt-3 small">
+                            <strong>Note:</strong> Template matching works best when numbers are perfectly centered and cropped.
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <h5>How it works</h5>
-                        <ul>
-                            <li><strong>Step 1:</strong> Rotate the image so the numbers are perfectly flat. Then draw a box around them.</li>
-                            <li><strong>Step 2:</strong> Click "Take Photo Now" to apply these settings and see the result.</li>
-                        </ul>
                     </div>
                 </div>
             </div>
@@ -109,9 +88,7 @@
         let cropper;
         const rawImg = document.getElementById('rawImage');
         
-        // Initialize Cropper when image loads
         rawImg.onload = () => {
-            // Store current data if we are refreshing
             const currentData = cropper ? cropper.getData(true) : {
                 x: {{ config.crop.x if config.crop else 100 }},
                 y: {{ config.crop.y if config.crop else 100 }},
@@ -123,42 +100,17 @@
             if (cropper) cropper.destroy();
             
             cropper = new Cropper(rawImg, {
-                viewMode: 2,
-                dragMode: 'none',
-                autoCropArea: 0.5,
-                restore: false,
-                guides: true,
-                center: true,
-                highlight: false,
-                cropBoxMovable: true,
-                cropBoxResizable: true,
-                toggleDragModeOnDblclick: false,
-                zoomable: false,
-                scalable: false,
-                movable: false,
-                rotatable: true,
+                viewMode: 2, dragMode: 'none', autoCropArea: 0.5, restore: false,
+                guides: true, center: true, highlight: false,
+                cropBoxMovable: true, cropBoxResizable: true,
+                zoomable: false, scalable: false, movable: false, rotatable: true,
                 data: currentData,
-                ready() {
-                    if (currentData.rotate !== 0) {
-                        cropper.rotateTo(currentData.rotate);
-                    }
-                },
-                crop(event) {
-                    document.getElementById('valX').innerText = Math.round(event.detail.x);
-                    document.getElementById('valY').innerText = Math.round(event.detail.y);
-                    document.getElementById('valW').innerText = Math.round(event.detail.width);
-                    document.getElementById('valH').innerText = Math.round(event.detail.height);
-                },
-                cropend() {
-                    saveConfig();
-                }
+                ready() { if (currentData.rotate !== 0) cropper.rotateTo(currentData.rotate); },
+                cropend() { saveConfig(); }
             });
         };
 
-        function rotate(deg) {
-            cropper.rotate(deg);
-            saveConfig();
-        }
+        function rotate(deg) { cropper.rotate(deg); saveConfig(); }
 
         function takePhoto() {
             const btn = document.getElementById('captureBtn');
@@ -170,49 +122,38 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        status.innerText = "Success! Updating images...";
-                        // Force refresh images by updating src with new timestamp
+                        status.innerText = "Success! Updating...";
                         const t = new Date().getTime();
-                        const raw = document.getElementById('rawImage');
-                        const proc = document.querySelector('img[alt="OCR View (Cropped)"]');
-                        
-                        raw.src = "/images/latest.jpg?t=" + t;
-                        if (proc) proc.src = "/images/processed.jpg?t=" + t;
-                        
-                        setTimeout(() => {
-                            status.innerText = "";
-                            btn.disabled = false;
-                        }, 2000);
+                        rawImg.src = "/images/latest.jpg?t=" + t;
+                        document.querySelector('img[alt="OCR View (Cropped)"]').src = "/images/processed.jpg?t=" + t;
+                        setTimeout(() => { status.innerText = ""; btn.disabled = false; }, 1000);
                     } else {
                         status.innerText = "Error: " + data.message;
                         btn.disabled = false;
                     }
-                })
-                .catch(err => {
-                    status.innerText = "Error: " + err;
-                    btn.disabled = false;
                 });
         }
 
+        function saveTemplates() {
+            if (!confirm("This will save the current cropped digits as your target reference. Make sure the numbers are clear. Continue?")) return;
+            fetch('/api/save_templates', { method: 'POST' })
+                .then(r => r.json())
+                .then(d => alert(d.message));
+        }
+
         function saveConfig() {
-            if (!cropper) return;
             const data = cropper.getData(true);
-            
+            const numDigits = document.getElementById('numDigits').value;
             fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     rotate: Math.round(data.rotate),
-                    crop: {
-                        x: data.x,
-                        y: data.y,
-                        w: data.width,
-                        h: data.height
-                    }
+                    num_digits: parseInt(numDigits),
+                    crop: { x: data.x, y: data.y, w: data.width, h: data.height }
                 })
             });
         }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
