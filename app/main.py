@@ -77,25 +77,20 @@ def capture_now():
     rotate = config.get('rotate', 0)
     crop = config.get('crop')
     
-    # Capture
     cmd = f"rpicam-still -o {IMAGES_DIR}/latest.jpg --width 1024 --height 768 --immediate --nopreview --timeout 2000"
     try:
         subprocess.run(cmd, shell=True, check=True)
         
-        # Process and Read with Gemini
         reader = WaterMeterReader()
         processed = reader.preprocess_image(
             os.path.join(IMAGES_DIR, "latest.jpg"), 
             crop=crop, 
             rotate=rotate
         )
-        # Save processed for UI preview
         cv2.imwrite(os.path.join(IMAGES_DIR, "processed.jpg"), processed)
         
-        # Only read on demand or in background script
         value = reader.read_numbers(processed)
         
-        # Save reading if it's a real number
         if value and value not in ["ERROR", "ERR_NO_KEY"]:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             reading = {"timestamp": timestamp, "value": value}
@@ -111,11 +106,6 @@ def capture_now():
         return jsonify({"status": "success", "value": value})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/latest')
-def api_latest():
-    readings = get_latest_readings(1)
-    return jsonify(readings[0] if readings else {})
 
 @app.route('/images/<filename>')
 def serve_image(filename):

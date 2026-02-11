@@ -1,30 +1,31 @@
 import cv2
 import numpy as np
 import os
-import google.generativeai as genai
+import base64
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
 class WaterMeterReader:
     def __init__(self):
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
-            genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-2.0-flash')
+            self.client = genai.Client(api_key=api_key)
+            self.model_id = "gemini-2.0-flash"
         else:
-            self.model = None
+            self.client = None
             print("WARNING: GEMINI_API_KEY not found in environment.")
 
     def preprocess_image(self, image_path, crop=None, rotate=0):
         """Preprocess the image: Rotate and Crop."""
-        # Load image
         img = cv2.imread(image_path)
         if img is None:
             raise ValueError(f"Could not read image at {image_path}")
 
-        # 1. Crop FIRST (Relative to original image)
+        # 1. Crop FIRST
         if crop and all(k in crop for k in ['x', 'y', 'w', 'h']):
             x, y, w, h = int(crop['x']), int(crop['y']), int(crop['w']), int(crop['h'])
             H_orig, W_orig = img.shape[:2]
@@ -34,10 +35,10 @@ class WaterMeterReader:
             h = max(1, min(h, H_orig - y))
             img = img[y:y+h, x:x+w]
 
-        # 2. Rotate the cropped result
+        # 2. Rotate
         if rotate != 0:
             (h, w) = img.shape[:2]
-            angle = -rotate  # Match JS/CSS rotation direction
+            angle = -rotate
             center = (w / 2, h / 2)
             M = cv2.getRotationMatrix2D(center, angle, 1.0)
             img = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))
@@ -45,30 +46,27 @@ class WaterMeterReader:
         return img
 
     def read_numbers(self, processed_image):
-        """Use Gemini Vision to extract numbers from the image."""
-        if not self.model:
+        """Use modern Google GenAI SDK to extract numbers."""
+        if not self.client:
             return "ERR_NO_KEY"
 
         try:
-            # Convert OpenCV image (BGR) to RGB for Gemini
+            # Convert to RGB and encode as JPEG
             rgb_img = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
-            
-            # Encode image to JPEG buffer
             _, buffer = cv2.imencode('.jpg', rgb_img)
-            image_data = buffer.tobytes()
+            
+            # Use the new SDK format
+            prompt = "Read the numeric value from this water meter counter. Return ONLY the digits as a single number. If digits are partially turned, provide your best guess."
+            
+            response = self.client.models.generate_content(
+                model=self.model_id,
+                contents=[
+                    prompt,
+                    types.Part.from_bytes(data=buffer.tobytes(), mime_type="image/jpeg")
+                ]
+            )
 
-            # Prepare the prompt
-            prompt = "Read the numeric value from this water meter counter. Return ONLY the digits as a single number. If you are unsure or some digits are partially turned, provide your best guess of the digits visible."
-
-            # Call Gemini
-            response = self.model.generate_content([
-                prompt,
-                {'mime_type': 'image/jpeg', 'data': image_data}
-            ])
-
-            # Clean up the response (remove any non-digits like spaces or decimals if Gemini adds them)
             result = response.text.strip()
-            # Extract only digits
             digits = "".join(filter(str.isdigit, result))
             
             print(f"Gemini Response: {result} -> Extracted: {digits}")
@@ -76,8 +74,8 @@ class WaterMeterReader:
 
         except Exception as e:
             print(f"Error calling Gemini API: {e}")
-            return f"ERROR"
+            return "ERROR"
 
 if __name__ == "__main__":
     reader = WaterMeterReader()
-    print("Reader initialized with Gemini support.")
+    print("Reader initialized with modern google-genai support.")

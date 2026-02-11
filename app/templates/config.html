@@ -31,28 +31,25 @@
             <div class="col-md-10 offset-md-1">
                 <div class="card">
                     <div class="card-body text-center">
-                        <h5 class="card-title">Camera & Recognition Settings</h5>
+                        <h5 class="card-title">Camera & Gemini AI Settings</h5>
                         <div class="row g-3 align-items-center justify-content-center mt-2">
                             <div class="col-auto">
-                                <label class="col-form-label">Rotation:</label>
+                                <label class="col-form-label">Rotate Image:</label>
                                 <div class="btn-group btn-group-sm ms-2">
                                     <button class="btn btn-outline-primary" onclick="rotate(-1)">-1°</button>
                                     <button class="btn btn-outline-primary" onclick="rotate(1)">+1°</button>
                                 </div>
                             </div>
                             <div class="col-auto ms-3">
-                                <label for="numDigits" class="col-form-label">Digits:</label>
+                                <button class="btn btn-sm btn-success" id="captureBtn" onclick="takePhoto()">Take Photo & Read</button>
                             </div>
                             <div class="col-auto">
-                                <input type="number" id="numDigits" class="form-control form-control-sm" style="width: 60px;" value="{{ config.num_digits if config.num_digits else 5 }}" onchange="saveConfig()">
-                            </div>
-                            <div class="col-auto ms-3">
-                                <button class="btn btn-sm btn-success" id="captureBtn" onclick="takePhoto()">Take Photo</button>
-                                <button class="btn btn-sm btn-warning" onclick="saveTemplates()">Save as Templates</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="window.location.reload()">Refresh View</button>
                             </div>
                         </div>
                         <div id="captureStatus" class="mt-2 small text-muted"></div>
                         <div class="ocr-result mt-3">Detected Value: {{ latest.value }}</div>
+                        <div class="text-muted small">1. Rotate image. 2. Select counter area. 3. Click "Take Photo & Read".</div>
                     </div>
                 </div>
             </div>
@@ -62,7 +59,7 @@
             <div class="col-md-7">
                 <div class="card">
                     <div class="card-body">
-                        <h6 class="card-title text-center">Step 1: Raw Image & Alignment</h6>
+                        <h6 class="card-title text-center">Step 1: Alignment (Raw Image)</h6>
                         <div class="img-preview-container">
                             <img src="/images/latest.jpg?t={{ range(1, 1000) | random }}" id="rawImage" class="img-preview" alt="Raw Image">
                         </div>
@@ -72,10 +69,10 @@
             <div class="col-md-5">
                 <div class="card">
                     <div class="card-body">
-                        <h6 class="card-title text-center">Step 2: Cropped View</h6>
+                        <h6 class="card-title text-center">Step 2: AI View (Cropped)</h6>
                         <img src="/images/processed.jpg?t={{ range(1, 1000) | random }}" class="img-preview" alt="OCR View (Cropped)">
-                        <div class="alert alert-warning mt-3 small">
-                            <strong>Note:</strong> Template matching works best when numbers are perfectly centered and cropped.
+                        <div class="alert alert-info mt-3 small">
+                            Gemini AI reads directly from this cropped image. No OCR libraries needed.
                         </div>
                     </div>
                 </div>
@@ -116,17 +113,22 @@
             const btn = document.getElementById('captureBtn');
             const status = document.getElementById('captureStatus');
             btn.disabled = true;
-            status.innerText = "Capturing...";
+            status.innerText = "Capturing & Sending to Gemini...";
             
             fetch('/api/capture', { method: 'POST' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        status.innerText = "Success! Updating...";
+                        status.innerText = "Success! Value: " + data.value;
                         const t = new Date().getTime();
                         rawImg.src = "/images/latest.jpg?t=" + t;
                         document.querySelector('img[alt="OCR View (Cropped)"]').src = "/images/processed.jpg?t=" + t;
-                        setTimeout(() => { status.innerText = ""; btn.disabled = false; }, 1000);
+                        setTimeout(() => { 
+                            status.innerText = ""; 
+                            btn.disabled = false;
+                            // Update the big result text
+                            document.querySelector('.ocr-result').innerText = "Detected Value: " + data.value;
+                        }, 2000);
                     } else {
                         status.innerText = "Error: " + data.message;
                         btn.disabled = false;
@@ -134,22 +136,13 @@
                 });
         }
 
-        function saveTemplates() {
-            if (!confirm("This will save the current cropped digits as your target reference. Make sure the numbers are clear. Continue?")) return;
-            fetch('/api/save_templates', { method: 'POST' })
-                .then(r => r.json())
-                .then(d => alert(d.message));
-        }
-
         function saveConfig() {
             const data = cropper.getData(true);
-            const numDigits = document.getElementById('numDigits').value;
             fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     rotate: Math.round(data.rotate),
-                    num_digits: parseInt(numDigits),
                     crop: { x: data.x, y: data.y, w: data.width, h: data.height }
                 })
             });
