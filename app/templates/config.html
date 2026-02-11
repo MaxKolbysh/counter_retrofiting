@@ -115,8 +115,8 @@
         rawImg.onload = () => {
             if (cropper) return; // Only init once
             cropper = new Cropper(rawImg, {
-                viewMode: 1,
-                dragMode: 'crop',
+                viewMode: 2,
+                dragMode: 'none',
                 autoCropArea: 0.5,
                 restore: false,
                 guides: true,
@@ -125,6 +125,9 @@
                 cropBoxMovable: true,
                 cropBoxResizable: true,
                 toggleDragModeOnDblclick: false,
+                zoomable: false,
+                scalable: false,
+                movable: false,
                 data: {
                     x: {{ config.crop.x if config.crop else 100 }},
                     y: {{ config.crop.y if config.crop else 100 }},
