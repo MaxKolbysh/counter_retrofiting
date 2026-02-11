@@ -28,12 +28,12 @@ os.makedirs(IMAGES_DIR, exist_ok=True)
 
 def get_config():
     if not os.path.exists(CONFIG_FILE):
-        return {"rotate": 0, "crop": None}
+        return {"rotate": 0, "crop": None, "mode": "cloud"}
     with open(CONFIG_FILE, 'r') as f:
         try:
             return json.load(f)
         except:
-            return {"rotate": 0, "crop": None}
+            return {"rotate": 0, "crop": None, "mode": "cloud"}
 
 def get_latest_readings(limit=10):
     if not os.path.exists(READINGS_FILE):
