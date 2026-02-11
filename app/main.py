@@ -1,11 +1,14 @@
-from flask import Flask, render_template, jsonify, send_from_directory
+from flask import Flask, render_template, jsonify, send_from_directory, request
 import os
 import json
 from datetime import datetime
 import sys
+import subprocess
+import cv2
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from core.processor import WaterMeterReader
 
 app = Flask(__name__)
 
@@ -21,12 +24,12 @@ os.makedirs(IMAGES_DIR, exist_ok=True)
 
 def get_config():
     if not os.path.exists(CONFIG_FILE):
-        return {"rotation": 0}
+        return {"rotate": 0, "crop": None}
     with open(CONFIG_FILE, 'r') as f:
         try:
             return json.load(f)
         except:
-            return {"rotation": 0}
+            return {"rotate": 0, "crop": None}
 
 def get_latest_readings(limit=10):
     if not os.path.exists(READINGS_FILE):
@@ -35,7 +38,7 @@ def get_latest_readings(limit=10):
         try:
             data = json.load(f)
             return data[-limit:]
-        except json.JSONDecodeError:
+        except:
             return []
 
 @app.route('/')
@@ -52,7 +55,6 @@ def config():
 
 @app.route('/api/config', methods=['POST'])
 def save_config():
-    from flask import request
     new_config = request.json
     with open(CONFIG_FILE, 'w') as f:
         json.dump(new_config, f, indent=4)
@@ -67,26 +69,23 @@ def clear_history():
 
 @app.route('/api/capture', methods=['POST'])
 def capture_now():
-    import subprocess
-    from core.processor import WaterMeterReader
-    
     config = get_config()
     rotate = config.get('rotate', 0)
+    crop = config.get('crop')
     
-    # Capture (We use 0 for hardware rotation now to avoid conflict with manual rotation)
+    # Capture (Hardware rotation is kept at 0 to match UI manual rotation)
     cmd = f"rpicam-still -o {IMAGES_DIR}/latest.jpg --width 1024 --height 768 --immediate --nopreview --timeout 2000"
     try:
         subprocess.run(cmd, shell=True, check=True)
         
-        # Process immediately so UI shows matching images
+        # Process immediately
         reader = WaterMeterReader()
         processed = reader.preprocess_image(
-            f"{IMAGES_DIR}/latest.jpg", 
-            crop=config.get('crop'),
+            os.path.join(IMAGES_DIR, "latest.jpg"), 
+            crop=crop, 
             rotate=rotate
         )
-        import cv2
-        cv2.imwrite(f"{IMAGES_DIR}/processed.jpg", processed)
+        cv2.imwrite(os.path.join(IMAGES_DIR, "processed.jpg"), processed)
         
         return jsonify({"status": "success"})
     except Exception as e:
