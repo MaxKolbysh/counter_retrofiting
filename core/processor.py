@@ -32,13 +32,32 @@ class WaterMeterReader:
         # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # Apply adaptive thresholding to get a binary image
+        # Upscale image (Tesseract likes larger text)
+        gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+
+        # Apply adaptive thresholding
         binary = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
         )
 
-        # Noise removal (optional but recommended for OCR)
-        kernel = np.ones((1, 1), np.uint8)
+        # Deskewing logic
+        coords = np.column_stack(np.where(binary > 0))
+        angle = cv2.minAreaRect(coords)[-1]
+        
+        # Adjust angle
+        if angle < -45:
+            angle = -(90 + angle)
+        else:
+            angle = -angle
+            
+        # Rotate to deskew
+        (h, w) = binary.shape[:2]
+        center = (w // 2, h // 2)
+        M = cv2.getRotationMatrix2D(center, angle, 1.0)
+        binary = cv2.warpAffine(binary, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+
+        # Noise removal
+        kernel = np.ones((2, 2), np.uint8)
         processed = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 
         return processed
