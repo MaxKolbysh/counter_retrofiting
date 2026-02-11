@@ -64,14 +64,22 @@ def clear_history():
 @app.route('/api/capture', methods=['POST'])
 def capture_now():
     import subprocess
-    # Run the capture script as a single-run command
-    # We'll need a way to run the main logic once.
-    # For now, let's just trigger the rpicam-still command directly using current config.
+    from core.processor import WaterMeterReader
+    
     config = get_config()
     rotation = config.get('rotation', 0)
+    
+    # Capture
     cmd = f"rpicam-still -o {IMAGES_DIR}/latest.jpg --width 1024 --height 768 --rotation {rotation} --immediate --nopreview --timeout 2000"
     try:
         subprocess.run(cmd, shell=True, check=True)
+        
+        # Process immediately so UI shows matching images
+        reader = WaterMeterReader()
+        processed = reader.preprocess_image(f"{IMAGES_DIR}/latest.jpg")
+        import cv2
+        cv2.imwrite(f"{IMAGES_DIR}/processed.jpg", processed)
+        
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
