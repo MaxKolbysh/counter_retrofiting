@@ -5,7 +5,6 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 class WaterMeterReader:
@@ -16,68 +15,64 @@ class WaterMeterReader:
             self.model_id = "gemini-2.0-flash"
         else:
             self.client = None
-            print("WARNING: GEMINI_API_KEY not found in environment.")
 
     def preprocess_image(self, image_path, crop=None, rotate=0):
-        """Simplified Preprocess: Crop original, then rotate the small piece."""
+        """
+        Processes image to match Cropper.js behavior:
+        1. Rotate full image around its center (1024x768).
+        2. Crop using coordinates relative to that rotated canvas.
+        """
         img = cv2.imread(image_path)
         if img is None:
-            raise ValueError(f"Could not read image at {image_path}")
+            return None
 
-        # 1. Crop from the ORIGINAL unrotated image
-        # Cropper.js 'getData(true)' provides coordinates relative to the original file
-        if crop and all(k in crop for k in ['x', 'y', 'w', 'h']):
-            x, y, w, h = int(crop['x']), int(crop['y']), int(crop['w']), int(crop['h'])
-            H_orig, W_orig = img.shape[:2]
-            
-            # Clamp coordinates
-            x = max(0, min(x, W_orig - 1))
-            y = max(0, min(y, H_orig - 1))
-            w = max(1, min(w, W_orig - x))
-            h = max(1, min(h, H_orig - y))
-            
-            img = img[y:y+h, x:x+w]
+        # Ensure we are working with the expected base resolution
+        # if the camera captured something else
+        if img.shape[0] != 768 or img.shape[1] != 1024:
+            img = cv2.resize(img, (1024, 768))
 
-        # 2. Rotate ONLY the small cropped piece
-        if rotate != 0 and img.size > 0:
-            (h, w) = img.shape[:2]
-            center = (w / 2, h / 2)
-            # OpenCV is CCW, JS is CW. Negate rotate.
+        # 1. Rotate the full 1024x768 image
+        # We keep the size 1024x768 to match how coordinates are reported
+        if rotate != 0:
+            h, w = img.shape[:2]
+            center = (w // 2, h // 2)
+            # OpenCV rotation is CCW, JS is CW. Negate the angle.
             M = cv2.getRotationMatrix2D(center, -rotate, 1.0)
             img = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))
 
-        # 3. Upscale slightly for AI clarity
-        if img.shape[0] < 200 and img.size > 0:
-            img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        # 2. Crop from the rotated image
+        if crop and all(k in crop for k in ['x', 'y', 'w', 'h']):
+            x, y, cw, ch = int(crop['x']), int(crop['y']), int(crop['w']), int(crop['h'])
+            H, W = img.shape[:2]
+            
+            # Boundary clamping
+            x = max(0, min(x, W - 1))
+            y = max(0, min(y, H - 1))
+            cw = max(1, min(cw, W - x))
+            ch = max(1, min(ch, H - y))
+            
+            img = img[y:y+ch, x:x+cw]
 
         return img
 
     def read_numbers(self, processed_image):
-        """Use modern Google GenAI SDK to extract numbers."""
-        if not self.client:
-            return "ERR_NO_KEY"
-        if processed_image is None or processed_image.size == 0:
-            return "ERR_EMPTY_IMG"
+        if not self.client or processed_image is None or processed_image.size == 0:
+            return "N/A"
 
         try:
             rgb_img = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
             _, buffer = cv2.imencode('.jpg', rgb_img)
             
-            prompt = "Read the numeric value from this water meter counter. Return ONLY the digits as a single number. This is a mechanical counter; some digits might be halfway turned."
-            
             response = self.client.models.generate_content(
                 model=self.model_id,
                 contents=[
-                    prompt,
+                    "Read the water meter digits. Return only the numbers.",
                     types.Part.from_bytes(data=buffer.tobytes(), mime_type="image/jpeg")
                 ]
             )
-
-            result = response.text.strip()
-            digits = "".join(filter(str.isdigit, result))
-            print(f"Gemini Response: {result} -> Extracted: {digits}")
-            return digits
-
+            val = "".join(filter(str.isdigit, response.text.strip()))
+            print(f"Gemini Read: {val}")
+            return val
         except Exception as e:
-            print(f"Error calling Gemini API: {e}")
+            print(f"Gemini Error: {e}")
             return "ERROR"

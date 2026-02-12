@@ -139,8 +139,9 @@
                     if (data.status === 'success') {
                         status.innerText = "Success! Value: " + data.value;
                         const t = new Date().getTime();
-                        // Update both images with NEW cache-buster
-                        document.getElementById('processedImage').src = "/images/processed.jpg?t=" + t;
+                        // Refresh processed image
+                        const procImg = document.getElementById('processedImage');
+                        if (procImg) procImg.src = "/images/processed.jpg?t=" + t;
                         
                         setTimeout(() => { 
                             status.innerText = ""; 
@@ -155,6 +156,7 @@
         }
 
         function saveConfig() {
+            if (!cropper) return;
             const data = cropper.getData(true);
             const isCloud = document.getElementById('modeToggle').checked;
             const mode = isCloud ? 'cloud' : 'local';
@@ -165,7 +167,12 @@
                 body: JSON.stringify({ 
                     rotate: Math.round(data.rotate),
                     mode: mode,
-                    crop: { x: data.x, y: data.y, w: data.width, h: data.height }
+                    crop: { 
+                        x: Math.round(data.x), 
+                        y: Math.round(data.y), 
+                        w: Math.round(data.width), 
+                        h: Math.round(data.height) 
+                    }
                 })
             });
         }

@@ -15,7 +15,6 @@ from core.processor import WaterMeterReader
 load_dotenv()
 
 def main():
-    # Paths
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     DATA_DIR = os.path.join(BASE_DIR, 'data')
     IMAGES_DIR = os.path.join(DATA_DIR, 'images')
@@ -24,13 +23,10 @@ def main():
     READINGS_FILE = os.path.join(DATA_DIR, 'readings.json')
     CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
     
-    # Ensure directories exist
     os.makedirs(IMAGES_DIR, exist_ok=True)
-    
-    # Initialize reader
     reader = WaterMeterReader()
     
-    # Load latest config
+    # Reload config every time
     rotate = 0
     crop = None
     if os.path.exists(CONFIG_PATH):
@@ -39,13 +35,13 @@ def main():
                 cfg = json.load(f)
                 rotate = cfg.get('rotate', 0)
                 crop = cfg.get('crop')
-        except:
-            pass
+                print(f"Loaded config: rotate={rotate}, crop={crop}")
+        except Exception as e:
+            print(f"Config load error: {e}")
 
-    # Camera Capture
-    captured = False
+    # Capture
     cmd = f"rpicam-still -o {IMAGE_PATH} --width 1024 --height 768 --immediate --nopreview --timeout 2000"
-    
+    captured = False
     try:
         ret = subprocess.run(cmd, shell=True, timeout=15)
         if ret.returncode == 0:
@@ -53,44 +49,34 @@ def main():
     except:
         pass
     
-    # Fallback to simulation if image exists but capture failed
     if not captured and os.path.exists(IMAGE_PATH):
         captured = True
 
     if captured:
         try:
-            # Process using the SAME logic as manual capture (Rotate then Crop)
             processed = reader.preprocess_image(IMAGE_PATH, crop=crop, rotate=rotate)
-            
-            # Save the processed image so the UI can see it
-            cv2.imwrite(PROCESSED_PATH, processed)
-            
-            # Read with Gemini
-            value = reader.read_numbers(processed)
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Read value: '{value}'")
-            
-            if value and value not in ["ERROR", "ERR_NO_KEY", "ERR_EMPTY_IMG"]:
-                # Save reading
+            if processed is not None:
+                cv2.imwrite(PROCESSED_PATH, processed)
+                value = reader.read_numbers(processed)
+                
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                reading = {"timestamp": timestamp, "value": value}
+                print(f"[{timestamp}] Value: {value}")
                 
-                data = []
-                if os.path.exists(READINGS_FILE):
-                    with open(READINGS_FILE, 'r') as f:
-                        try: data = json.load(f)
-                        except: data = []
-                
-                data.append(reading)
-                with open(READINGS_FILE, 'w') as f:
-                    json.dump(data[-100:], f, indent=4)
-                    
+                if value and value not in ["ERROR", "N/A"]:
+                    reading = {"timestamp": timestamp, "value": value}
+                    data = []
+                    if os.path.exists(READINGS_FILE):
+                        with open(READINGS_FILE, 'r') as f:
+                            try: data = json.load(f)
+                            except: data = []
+                    data.append(reading)
+                    with open(READINGS_FILE, 'w') as f:
+                        json.dump(data[-100:], f, indent=4)
         except Exception as e:
-            print(f"Error during processing: {e}")
-    else:
-        print("Capture failed and no simulation image found.")
+            print(f"Process error: {e}")
 
 if __name__ == "__main__":
-    print("Background capture service started...")
+    print("Background capture service running...")
     while True:
         main()
         time.sleep(60)
