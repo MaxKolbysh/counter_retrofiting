@@ -38,7 +38,7 @@
                                     <input class="form-check-input" type="checkbox" id="modeToggle" 
                                            {% if config.mode == 'cloud' or not config.mode %}checked{% endif %}
                                            onchange="saveConfig()">
-                                    <label class="form-check-label" for="modeToggle">Cloud Processing</label>
+                                    <label class="form-check-label" for="modeToggle">Cloud Processing (Gemini)</label>
                                     <div class="small text-muted" id="modeDesc">Currently using Gemini AI</div>
                                 </div>
                             </div>
@@ -74,10 +74,10 @@
             <div class="col-md-5">
                 <div class="card">
                     <div class="card-body">
-                        <h6 class="card-title text-center">Step 2: Cropped View</h6>
-                        <img src="/images/processed.jpg?t={{ range(1, 1000) | random }}" class="img-preview" alt="OCR View (Cropped)">
+                        <h6 class="card-title text-center">Step 2: AI View (Cropped)</h6>
+                        <img src="/images/processed.jpg?t={{ range(1, 1000) | random }}" id="processedImage" class="img-preview" alt="OCR View (Cropped)">
                         <div class="alert alert-info mt-3 small">
-                            Select exactly the counter digits area for the best results.
+                            Selection area is saved automatically. Changes will apply to the next background capture (every 60s).
                         </div>
                     </div>
                 </div>
@@ -90,29 +90,42 @@
         let cropper;
         const rawImg = document.getElementById('rawImage');
         
-        rawImg.onload = () => {
-            const currentData = cropper ? cropper.getData(true) : {
-                x: {{ config.crop.x if config.crop else 100 }},
-                y: {{ config.crop.y if config.crop else 100 }},
-                width: {{ config.crop.w if config.crop else 400 }},
-                height: {{ config.crop.h if config.crop else 150 }},
-                rotate: {{ config.rotate if config.rotate else 0 }}
-            };
+        // Define initial config from server
+        const savedConfig = {
+            x: {{ config.crop.x if config.crop else 100 }},
+            y: {{ config.crop.y if config.crop else 100 }},
+            w: {{ config.crop.w if config.crop else 400 }},
+            h: {{ config.crop.h if config.crop else 150 }},
+            rotate: {{ config.rotate if config.rotate else 0 }}
+        };
 
-            if (cropper) cropper.destroy();
+        rawImg.onload = () => {
+            if (cropper) return; // Prevent multiple inits
             
             cropper = new Cropper(rawImg, {
                 viewMode: 2, dragMode: 'none', autoCropArea: 0.5, restore: false,
                 guides: true, center: true, highlight: false,
                 cropBoxMovable: true, cropBoxResizable: true,
                 zoomable: false, scalable: false, movable: false, rotatable: true,
-                data: currentData,
-                ready() { if (currentData.rotate !== 0) cropper.rotateTo(currentData.rotate); },
+                ready() {
+                    // Force the saved state strictly
+                    cropper.rotateTo(savedConfig.rotate);
+                    cropper.setData({
+                        x: savedConfig.x,
+                        y: savedConfig.y,
+                        width: savedConfig.w,
+                        height: savedConfig.h
+                    });
+                },
                 cropend() { saveConfig(); }
             });
         };
 
-        function rotate(deg) { cropper.rotate(deg); saveConfig(); }
+        function rotate(deg) { 
+            cropper.rotate(deg); 
+            // Wait a moment for rotation to finish before saving
+            setTimeout(saveConfig, 100);
+        }
 
         function takePhoto() {
             const btn = document.getElementById('captureBtn');
@@ -126,8 +139,9 @@
                     if (data.status === 'success') {
                         status.innerText = "Success! Value: " + data.value;
                         const t = new Date().getTime();
-                        rawImg.src = "/images/latest.jpg?t=" + t;
-                        document.querySelector('img[alt="OCR View (Cropped)"]').src = "/images/processed.jpg?t=" + t;
+                        // Update both images with NEW cache-buster
+                        document.getElementById('processedImage').src = "/images/processed.jpg?t=" + t;
+                        
                         setTimeout(() => { 
                             status.innerText = ""; 
                             btn.disabled = false;
@@ -145,8 +159,6 @@
             const isCloud = document.getElementById('modeToggle').checked;
             const mode = isCloud ? 'cloud' : 'local';
             
-            document.getElementById('modeDesc').innerText = isCloud ? 'Currently using Gemini AI' : 'Local processing (TFLite)';
-
             fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

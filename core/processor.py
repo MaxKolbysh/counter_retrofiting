@@ -19,44 +19,34 @@ class WaterMeterReader:
             print("WARNING: GEMINI_API_KEY not found in environment.")
 
     def preprocess_image(self, image_path, crop=None, rotate=0):
-        """Preprocess: Rotate full image, THEN crop. This matches Cropper.js behavior."""
+        """Simplified Preprocess: Crop original, then rotate the small piece."""
         img = cv2.imread(image_path)
         if img is None:
             raise ValueError(f"Could not read image at {image_path}")
 
-        # 1. Rotate the FULL image first
-        if rotate != 0:
-            (h, w) = img.shape[:2]
-            # OpenCV rotation center is (x, y)
-            center = (w / 2, h / 2)
-            # OpenCV is CCW, JS is CW. Negate rotate.
-            M = cv2.getRotationMatrix2D(center, -rotate, 1.0)
-            
-            # Calculate new image bounds to prevent cutting off corners after rotation
-            cos = np.abs(M[0, 0])
-            sin = np.abs(M[0, 1])
-            new_w = int((h * sin) + (w * cos))
-            new_h = int((h * cos) + (w * sin))
-            
-            # Adjust rotation matrix to include translation to new center
-            M[0, 2] += (new_w / 2) - center[0]
-            M[1, 2] += (new_h / 2) - center[1]
-            
-            img = cv2.warpAffine(img, M, (new_w, new_h), flags=cv2.INTER_CUBIC)
-
-        # 2. Crop from the rotated image
+        # 1. Crop from the ORIGINAL unrotated image
+        # Cropper.js 'getData(true)' provides coordinates relative to the original file
         if crop and all(k in crop for k in ['x', 'y', 'w', 'h']):
             x, y, w, h = int(crop['x']), int(crop['y']), int(crop['w']), int(crop['h'])
-            H_rot, W_rot = img.shape[:2]
+            H_orig, W_orig = img.shape[:2]
             
-            x = max(0, min(x, W_rot - 1))
-            y = max(0, min(y, H_rot - 1))
-            w = max(1, min(w, W_rot - x))
-            h = max(1, min(h, H_rot - y))
+            # Clamp coordinates
+            x = max(0, min(x, W_orig - 1))
+            y = max(0, min(y, H_orig - 1))
+            w = max(1, min(w, W_orig - x))
+            h = max(1, min(h, H_orig - y))
             
             img = img[y:y+h, x:x+w]
 
-        # 3. Upscale for AI clarity if needed
+        # 2. Rotate ONLY the small cropped piece
+        if rotate != 0 and img.size > 0:
+            (h, w) = img.shape[:2]
+            center = (w / 2, h / 2)
+            # OpenCV is CCW, JS is CW. Negate rotate.
+            M = cv2.getRotationMatrix2D(center, -rotate, 1.0)
+            img = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))
+
+        # 3. Upscale slightly for AI clarity
         if img.shape[0] < 200 and img.size > 0:
             img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
 
@@ -91,7 +81,3 @@ class WaterMeterReader:
         except Exception as e:
             print(f"Error calling Gemini API: {e}")
             return "ERROR"
-
-if __name__ == "__main__":
-    reader = WaterMeterReader()
-    print("Reader initialized with sync-alignment logic.")
