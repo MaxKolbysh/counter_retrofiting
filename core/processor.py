@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 import os
-import base64
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -20,31 +19,45 @@ class WaterMeterReader:
             print("WARNING: GEMINI_API_KEY not found in environment.")
 
     def preprocess_image(self, image_path, crop=None, rotate=0):
-        """Preprocess the image: Rotate and Crop in color."""
+        """Preprocess: Rotate full image, THEN crop. This matches Cropper.js behavior."""
         img = cv2.imread(image_path)
         if img is None:
             raise ValueError(f"Could not read image at {image_path}")
 
-        # 1. Crop FIRST
-        if crop and all(k in crop for k in ['x', 'y', 'w', 'h']):
-            x, y, w, h = int(crop['x']), int(crop['y']), int(crop['w']), int(crop['h'])
-            H_orig, W_orig = img.shape[:2]
-            x = max(0, min(x, W_orig - 1))
-            y = max(0, min(y, H_orig - 1))
-            w = max(1, min(w, W_orig - x))
-            h = max(1, min(h, H_orig - y))
-            img = img[y:y+h, x:x+w]
-
-        # 2. Rotate
+        # 1. Rotate the FULL image first
         if rotate != 0:
             (h, w) = img.shape[:2]
-            angle = -rotate
+            # OpenCV rotation center is (x, y)
             center = (w / 2, h / 2)
-            M = cv2.getRotationMatrix2D(center, angle, 1.0)
-            img = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0))
+            # OpenCV is CCW, JS is CW. Negate rotate.
+            M = cv2.getRotationMatrix2D(center, -rotate, 1.0)
+            
+            # Calculate new image bounds to prevent cutting off corners after rotation
+            cos = np.abs(M[0, 0])
+            sin = np.abs(M[0, 1])
+            new_w = int((h * sin) + (w * cos))
+            new_h = int((h * cos) + (w * sin))
+            
+            # Adjust rotation matrix to include translation to new center
+            M[0, 2] += (new_w / 2) - center[0]
+            M[1, 2] += (new_h / 2) - center[1]
+            
+            img = cv2.warpAffine(img, M, (new_w, new_h), flags=cv2.INTER_CUBIC)
 
-        # 3. Upscale slightly for better AI clarity if the crop is small
-        if img.shape[0] < 200:
+        # 2. Crop from the rotated image
+        if crop and all(k in crop for k in ['x', 'y', 'w', 'h']):
+            x, y, w, h = int(crop['x']), int(crop['y']), int(crop['w']), int(crop['h'])
+            H_rot, W_rot = img.shape[:2]
+            
+            x = max(0, min(x, W_rot - 1))
+            y = max(0, min(y, H_rot - 1))
+            w = max(1, min(w, W_rot - x))
+            h = max(1, min(h, H_rot - y))
+            
+            img = img[y:y+h, x:x+w]
+
+        # 3. Upscale for AI clarity if needed
+        if img.shape[0] < 200 and img.size > 0:
             img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
 
         return img
@@ -53,13 +66,13 @@ class WaterMeterReader:
         """Use modern Google GenAI SDK to extract numbers."""
         if not self.client:
             return "ERR_NO_KEY"
+        if processed_image is None or processed_image.size == 0:
+            return "ERR_EMPTY_IMG"
 
         try:
-            # Convert OpenCV image (BGR) to RGB for Gemini
             rgb_img = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
             _, buffer = cv2.imencode('.jpg', rgb_img)
             
-            # Prepare prompt
             prompt = "Read the numeric value from this water meter counter. Return ONLY the digits as a single number. This is a mechanical counter; some digits might be halfway turned."
             
             response = self.client.models.generate_content(
@@ -71,9 +84,7 @@ class WaterMeterReader:
             )
 
             result = response.text.strip()
-            # Extract digits only
             digits = "".join(filter(str.isdigit, result))
-            
             print(f"Gemini Response: {result} -> Extracted: {digits}")
             return digits
 
@@ -83,4 +94,4 @@ class WaterMeterReader:
 
 if __name__ == "__main__":
     reader = WaterMeterReader()
-    print("Reader initialized with color AI support.")
+    print("Reader initialized with sync-alignment logic.")
